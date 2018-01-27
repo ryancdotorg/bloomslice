@@ -27,12 +27,6 @@ bloomslice_hashes.py.intermediate: bloomslice_hashes.py
 bloom_h160_chk.o: bloom_h160_chk.asm art.asm hash.mac $(ASMINCS)
 	nasm -w+all -f elf64 -Ox -o $@ $<
 
-bfschk: bfschk.c bloom_h160_chk.o bloom_h160_set.o hex.o mmapf.o
-	$(CC) $(CFLAGS) -o $@ $^
-
-hex2bfs: hex2bfs.c bloom_h160_chk.o bloom_h160_set.o bloomutl.o hex.o
-	$(CC) $(CFLAGS) -o $@ $^ -lm
-
 bfstool: bfstool.c bloom_h160_chk.o bloom_h160_set.o bloomutl.o hex.o mmapf.o
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
