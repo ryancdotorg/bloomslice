@@ -5,7 +5,8 @@ CFLAGS=-ggdb -O2 -Wall -Wextra -Wno-unused-function -Wno-pointer-sign \
 LDFLAGS=$(CFLAGS)
 LDLIBS=-lm
 ASMINCS=hash2b.inc hash1s.inc hash2s.inc hash3s.inc \
-		data2b.inc data1s.inc data2s.inc data3s.inc
+		data2b.inc data1s.inc data2s.inc data3s.inc \
+		legacy.inc
 
 #OBJS=ffrngbtc.o rmd160256.o sha256.o
 
