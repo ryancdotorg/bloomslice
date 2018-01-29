@@ -36,8 +36,6 @@ asmwrap: asmwrap.c bloom_h160_chk.o bloom_h160_set.o
 pcalc: pcalc.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
-hex_test: hex_test.c hex.o
-	$(CC) $(CFLAGS) -o $@ $^
 #install: all
 #	cp --remove-destination -p ffrngbtc /usr/local/bin/
 #
