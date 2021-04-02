@@ -56,7 +56,7 @@ uint64_t bloom_size_to_mask(size_t sz) {
     return 0;
   } else {
     return (bz<<3) - 1;
-  }  
+  }
 }
 
 int bloom_chk_size(size_t sz) {
