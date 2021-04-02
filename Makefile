@@ -26,5 +26,6 @@ pcalc: pcalc.c
 
 bloomslice.a: bloom_h160_chk.o bloom_h160_set.o bloomutl.o hex.o mmapf.o
 	ar rcs $@ $^
+
 clean:
-	rm -f $(ASMGEN) *.o pcalc bfstool bloomslice.a || /bin/true
+	rm -f *.o bloom_h160_chk.c pcalc bfstool bloomslice.a || /bin/true
