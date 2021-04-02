@@ -1,3 +1,10 @@
+#!/bin/sh
+""""true
+command -v python3 >/dev/null && exec python3 "$0"
+command -v python2 >/dev/null && exec python2 "$0"
+command -v python >/dev/null && exec python "$0"
+exit 1
+"""
 #!/usr/bin/env python3
 from __future__ import print_function
 
