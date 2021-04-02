@@ -1,0 +1,14 @@
+# Ingore all
+*
+# Unignore files with extensions
+!*.*
+# Unignore directories
+!*/
+# Unignore Makefile
+!Makefile
+
+.gitignore
+*.o
+*.a
+.*.swp
+bloom_h160_chk.c
