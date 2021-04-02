@@ -14,6 +14,9 @@ bloom_h160_chk.c: bloomslice_hashes.py.intermediate
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
+%.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+
 .INTERMEDIATE: bloomslice_hashes.py.intermediate
 bloomslice_hashes.py.intermediate: bloomslice_hashes.py
 	./bloomslice_hashes.py bloom_h160_chk.c
