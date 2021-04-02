@@ -16,7 +16,7 @@ bloom_h160_chk.c: bloomslice_hashes.py.intermediate
 
 .INTERMEDIATE: bloomslice_hashes.py.intermediate
 bloomslice_hashes.py.intermediate: bloomslice_hashes.py
-	python3 bloomslice_hashes.py || python2 bloomslice_hashes.py || python bloomslice_hashes.py
+	./bloomslice_hashes.py bloom_h160_chk.c
 
 bfstool: bfstool.c bloom_h160_chk.o bloom_h160_set.o bloomutl.o hex.o mmapf.o
 	$(CC) $(CFLAGS) -o $@ $^ -lm

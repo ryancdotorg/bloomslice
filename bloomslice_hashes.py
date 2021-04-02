@@ -1,11 +1,8 @@
 #!/bin/sh
-""""true
-command -v python3 >/dev/null && exec python3 "$0"
-command -v python2 >/dev/null && exec python2 "$0"
-command -v python >/dev/null && exec python "$0"
-exit 1
-"""
-#!/usr/bin/env python3
+""""command -v python3 >/dev/null && exec python3 "$0" "$@"
+    command -v python2 >/dev/null && exec python2 "$0" "$@"
+    command -v python  >/dev/null && exec python  "$0" "$@"
+exit 1 """#"
 from __future__ import print_function
 
 import sys
@@ -131,7 +128,7 @@ while len(cs3) < len(combos_s3):
     best_c = tuple(best_c)
     cs3.append(best_c)
 
-with open('bloom_h160_chk.c', 'w') as f:
+with open(sys.argv[1], 'w') as f:
     f.write('#include <stdint.h>\n')
     f.write('#include <stdlib.h>\n')
     f.write('#include <string.h>\n')
