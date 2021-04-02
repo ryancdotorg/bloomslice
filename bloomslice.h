@@ -1,7 +1,4 @@
-/* Copyright (c) 2017 Ryan Castellucci, All Rights Reserved */
-#ifndef __BLOOMSLICE_H_
-#define __BLOOMSLICE_H_
-
+#pragma once
 #define BFS_TYPE_LEGACY 0
 #define BFS_TYPE_SINGLE 1
 // Should be equal to the last static type
@@ -31,4 +28,3 @@ uint8_t pickhash_es(double, double, uint64_t, uint8_t *, uint8_t *);
 int32_t bloom_h160_set(uint8_t *mem, const void *h160, uint8_t n, uint64_t mask);
 
 int32_t bloom_h160_chk(const uint8_t *mem, const void *h160, uint8_t n, uint64_t mask);
-#endif//__BLOOMSLICE_H_

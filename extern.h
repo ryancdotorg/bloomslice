@@ -1,6 +1,4 @@
-/* Copyright (c) 2017 Ryan Castellucci, All Rights Reserved */
-#ifndef __BLOOMSLICE_EXTERN_H_
-#define __BLOOMSLICE_EXTERN_H_
+#pragma once
 // max hashes per scheme
 extern uint8_t hash1sN;
 extern uint8_t hash2bN;
@@ -17,4 +15,3 @@ extern uint8_t data3sT[];
 extern char hashD[256][8];
 // jump table
 extern uint64_t hashJ[256];
-#endif//__BLOOMSLICE_EXTERN_H_

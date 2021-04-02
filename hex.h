@@ -1,7 +1,4 @@
-/* Copyright (c) 2015 Ryan Castellucci, All Rights Reserved */
-#ifndef __BRAINFLAYER_HEX_H_
-#define __BRAINFLAYER_HEX_H_
-
+#pragma once
 static const unsigned char unhexH[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
@@ -33,6 +30,3 @@ unhex(unsigned char *str, size_t str_sz,
 }
 
 unsigned char * hex(unsigned char *, size_t, unsigned char *, size_t);
-
-#endif /* __BRAINFLAYER_HEX_H_ */
-/*  vim: set ts=2 sw=2 et ai si: */

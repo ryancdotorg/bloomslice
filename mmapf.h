@@ -1,7 +1,4 @@
-/*  Copyright (c) 2015 Ryan Castellucci, All Rights Reserved */
-#ifndef __MMAPF_H_
-#define __MMAPF_H_
-
+#pragma once
 typedef struct {
   void *mem;
   size_t mmap_sz;
@@ -40,6 +37,3 @@ typedef struct {
 char * mmapf_strerror(int);
 int mmapf(mmapf_ctx *, const unsigned char *, size_t, int);
 int munmapf(mmapf_ctx *);
-
-/*  vim: set ts=2 sw=2 et ai si: */
-#endif /* __MMAPF_H_ */
