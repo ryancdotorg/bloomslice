@@ -18,7 +18,9 @@ double bloom_saturation(uint32_t k, uint64_t m, uint64_t n) {
   return 1 - pow(1 - (1 / (double)m), (double)k * (double)n);
 }
 
-char * deschash(uint8_t h) { return (&hashD)+h*16; }
+//char * deschash(uint8_t h) { return (&hashD)+h*8; }
+char * deschash(uint8_t h) { return hashD[h]; }
+void * jumphash(uint8_t h) { return (void *)(hashJ[h]); }
 
 size_t bloom_width_to_size(uint8_t width) {
   if (width == BFS_TYPE_LEGACY) {
@@ -108,6 +110,42 @@ uint8_t pickhash_wk(uint8_t width, uint8_t hashes) {
   }
 }
 
+uint8_t pickhash_wi(uint8_t width, uint64_t items, uint8_t *k) {
+  double bits = 1ULL<<width;
+  unsigned int opt = round((log(2.0) * bits) / (double)items);
+  uint8_t kOpt = opt < 256 ? (opt > 0 ? opt : 1) : 255;
+
+  if (width < 8 || width > 48) { // invalid parameters
+    return 255;
+  } else if (kOpt <= hash1sN && width >= 8 && width <= 16) { // hash1s
+    *k = kOpt;
+    return pickhash_wk(width, kOpt);
+  } else if (width == 8) {
+    *k = hash1sN;
+    return pickhash_wk(width, hash1sN);
+  } else if (kOpt <= hash2bN && width >  8 && width <= 16) { // hash2b
+    *k = kOpt;
+    return pickhash_wk(width, kOpt);
+  } else if (width <= 16) {
+    *k = hash2bN;
+    return pickhash_wk(width, hash2bN);
+  } else if (kOpt <= hash2sN && width > 16 && width <= 32) { // hash2s
+    *k = kOpt;
+    return pickhash_wk(width, kOpt);
+  } else if (width <= 32) {
+    *k = hash2sN;
+    return pickhash_wk(width, hash2sN);
+  } else if (kOpt <= hash3sN && width > 32 && width <= 48) { // hash3s
+    *k = kOpt;
+    return pickhash_wk(width, kOpt);
+  } else if (width <= 48) {
+    *k = hash3sN;
+    return pickhash_wk(width, hash3sN);
+  } else { // no suitable hash found
+    return 255;
+  }
+}
+
 uint8_t pickhash_es(double max_error, double max_bloom_saturation, uint64_t n, uint8_t *max_w, uint8_t *new_k) {
   if (max_error < 0 || max_bloom_saturation < 0) return 255;
 
@@ -135,7 +173,7 @@ uint8_t pickhash_es(double max_error, double max_bloom_saturation, uint64_t n, u
 
   s = bloom_saturation(k, m, n);
   e = pow(s, k);
-  
+
   while (e > max_error || s > max_bloom_saturation) {
     if (k >= max_k_by_w[w]) {
       m <<= 1; ++w; k = 0;

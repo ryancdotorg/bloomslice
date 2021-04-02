@@ -8,6 +8,7 @@
 #define BFS_TYPE_OFFSET 1
 
 char * deschash(uint8_t);
+void * jumphash(uint8_t);
 
 uint64_t bloom_width_to_size(uint8_t);
 uint64_t bloom_width_to_mask(uint8_t);
@@ -24,6 +25,7 @@ uint64_t bloom_get_items(unsigned char *, size_t);
 void     bloom_set_items(unsigned char *, size_t, uint64_t);
 
 uint8_t pickhash_wk(uint8_t, uint8_t);
+uint8_t pickhash_wi(uint8_t, uint64_t, uint8_t *);
 uint8_t pickhash_es(double, double, uint64_t, uint8_t *, uint8_t *);
 
 int32_t bloom_h160_set(uint8_t *mem, const void *h160, uint8_t n, uint64_t mask);

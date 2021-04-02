@@ -1,5 +1,14 @@
 ; should compatible with the old fixed parameter bloom filter from brainflayer
 
+%macro check_bit_reg 1 ; check whether bit rax of the bloom filter is set
+  mov   rdx, rax       ; copy hash
+  shr   rax, 3         ; byte to check in rax
+  and   edx, 7         ; mask off bit to check
+  mov    al, [rdi+rax] ; load byte to check from memory
+  bt     ax, dx        ; bit test against bloom filter (set carry flag)
+  jnc   bloom_miss     ; jump to return a 'miss' if bit isn't set
+%endmacro              ; rax and rdx are clobbered
+
 legacy:
   ; load hash into registers
   mov ecx,  [rsi+0x00]

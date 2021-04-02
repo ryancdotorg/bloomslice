@@ -55,6 +55,7 @@ char hash_file_type(FILE *stream) {
 
 /* NOTES
 Modes:
+  -A - dump algorithm info
   -W - create bloom filter
   -R - check data against bloom filter
   -D - produce bloom filter diff (later)
@@ -71,13 +72,23 @@ Options:
   -e: - bloom filter error rate (create mode)
   -s: - bloom filter saturation (create mode)
   -H  - force hash/input file to be treated as hex
-  -B  - force hash/input file to be treated as binary (raw) 
+  -B  - force hash/input file to be treated as binary (raw)
 */
 void usage(unsigned char *name) {
   printf("Usage: %s OPTIONS...\n\n\
 \n", name);
   exit(1);
 }
+
+// Default constraints on bloom filter parameters:
+// Maximum size: 4GiB
+// Maximum error rate 1 in 10,000,000
+// Maximum saturation: 51%
+// Lower saturation tends to be faster, the point of diminishing
+// returns seems to be somewhere between 0.125 and 0.250
+#define DEFAULT_MAX_SATURATION 0.51
+#define DEFAULT_MAX_ERROR_RATE 1e-7
+#define DEFAULT_MAX_BIT_WIDTH  35
 
 int main(int argc, char **argv) {
   hash160_t hash;
@@ -87,14 +98,10 @@ int main(int argc, char **argv) {
   mmapf_ctx bloom_mmapf;
   struct stat sb;
 
-  // Default constraints on bloom filter parameters:
-  // Maximum size: 4GiB
-  // Maximum error rate 1 in 10,000,000
-  // Maximum saturation: 51%
-  // Lower saturation tends to be faster, the point of diminishing
-  // returns seems to be somewhere between 0.125 and 0.250
-  uint8_t wopt = 35, kopt = 0;
-  double eopt = 1e-7, sopt = 0.51; // defaults chosen for size
+  uint8_t kopt = 0;
+  uint8_t wopt = DEFAULT_MAX_BIT_WIDTH;
+  double sopt = DEFAULT_MAX_SATURATION;
+  double eopt = DEFAULT_MAX_ERROR_RATE;
 
   unsigned char *bopt = NULL, *xopt = NULL, *fopt = NULL;
   unsigned char *dopt = NULL, *iopt = NULL, *oopt = NULL;
@@ -115,8 +122,13 @@ int main(int argc, char **argv) {
 
   int c, r;
 
-  while ((c = getopt(argc, argv, "BHWRb:x:f:i:o:w:k:e:s:")) != -1) {
+  while ((c = getopt(argc, argv, "ABHWRb:x:f:i:o:w:k:e:s:")) != -1) {
     switch (c) {
+      case 'A':
+        for (int i = 0; i < 256; ++i) {
+          printf("%8s %p\n", deschash(i), jumphash(i));
+        }
+        return 0;
       case 'W':
       case 'R':
         if (mode) bail(1, "[!] Mode '%c' already selected, can't also specify '%c'\n", mode, c);
@@ -158,6 +170,7 @@ int main(int argc, char **argv) {
 
     // manually specified number of hashes
     if (kopt) {
+      fprintf(stderr, "pickhash_wk w:%u k:%u\n", wopt, kopt);
       if ((h = pickhash_wk(wopt, kopt)) == 255) {
         bail(1, "[!] No hash routine found for specified parameters\n");
       }
@@ -190,7 +203,7 @@ int main(int argc, char **argv) {
 
     items = sb.st_size / (hfmt == 'H' ? 41 : 20);
 
-      fprintf(stderr, "derp? h:%u w:%u\n", h, wopt);
+    fprintf(stderr, "defaults h:%u w:%u\n", h, wopt);
     // if a hash routine still hasn't been chosen, pick one now
     if (items == 0) {
       bail(1, "[!] No hashes to load\n");
@@ -198,9 +211,16 @@ int main(int argc, char **argv) {
       bloom_size = bloom_width_to_size(BFS_TYPE_SINGLE);
       h = BFS_TYPE_SINGLE;
     } else if (h >= 254) {
-      fprintf(stderr, "derp? h:%u\n", h);
-      if ((h = pickhash_es(eopt, sopt, items, &wopt, &kopt)) >= 254) {
-        bail(1, "[!] No hash routine found for specified parameters\n");
+      if (eopt < 0) {
+        fprintf(stderr, "pickhash_wi w:%u i:%lu\n", wopt, items);
+        if ((h = pickhash_wi(wopt, items, &kopt)) >= 254) {
+          bail(1, "[!] No hash routine found for specified parameters\n");
+        }
+      } else {
+        fprintf(stderr, "pickhash_es e:%.3e s:%.3f i:%lu w:%u k:%u\n", eopt, sopt, items, wopt, kopt);
+        if ((h = pickhash_es(eopt, sopt, items, &wopt, &kopt)) >= 254) {
+          bail(1, "[!] No hash routine found for specified parameters\n");
+        }
       }
     }
 
@@ -218,17 +238,19 @@ int main(int argc, char **argv) {
       }
     }
 
-    mask = bloom_width_to_mask(wopt); //(1ULL<<wopt) - 1;
+    fprintf(stderr, "parameters h:%u w:%u k:%u i:%lu\n", h, wopt, kopt, items);
+    mask = bloom_width_to_mask(wopt);
     sat = bloom_saturation(kopt, 1ULL<<wopt, items);
     err_rate = pow(sat, kopt);
 
-    fprintf(stderr, "[*] Selected function %s (0x%02x) with mask 0x%zx\n", deschash(h), h, mask);
-    fprintf(stderr, "[*] Have %zu hashes to load into %zu byte filter\n", items, bloom_size);
+    fprintf(stderr, "[*] Selected function %s (%u) with mask 0x%zx\n", deschash(h), h, mask);
+    fprintf(stderr, "[*] Have %zu hashes to load into %zu bit filter (%zu bytes)\n", items, (bloom_size - 9) * 8, bloom_size);
     if (items > 0) {
       fprintf(stderr, "[*] Saturation: ~%.3f\n", sat);
       fprintf(stderr, "[*] False positive rate: ~%.3e (1 in ~%.3e)\n", err_rate, 1/err_rate);
     }
 
+    exit(0);
     bloom = chkmalloc(bloom_size);
     fprintf(stderr, "[*] Zeroing memory...\n");
     memset(bloom, 0, bloom_size);
@@ -279,6 +301,9 @@ int main(int argc, char **argv) {
     if (dopt || xopt) {
       bail(1, "[!] Invalid combination of file options for check mode\n");
     }
+    if (iopt && (ifile = fopen(iopt, "r")) == NULL) {
+      bail(1, "[!] Failed to open input file '%s': %s\n", iopt, strerror(errno));
+    }
 
     if (stat(bopt, &sb) == 0) {
       if (!S_ISREG(sb.st_mode)) {
@@ -291,7 +316,7 @@ int main(int argc, char **argv) {
     } else {
       bail(1, "[!] Failed to stat '%s': %s\n", bopt, strerror(errno));
     }
-    
+
     if ((r = mmapf(&bloom_mmapf, bopt, bloom_size, MMAPF_RNDRD)) != MMAPF_OKAY) {
       bail(1, "[!] Failed to open bloom filter '%s': %s\n", bopt, mmapf_strerror(r));
     } else if (bloom_mmapf.mem == NULL) {

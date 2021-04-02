@@ -14,5 +14,7 @@ extern uint8_t data2sT[];
 extern uint8_t data3sT[];
 
 // hash descriptions
-extern char hashD;
+extern char hashD[256][8];
+// jump table
+extern uint64_t hashJ[256];
 #endif//__BLOOMSLICE_EXTERN_H_
