@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "bloomslice.h"
+#include "bloomutl.h"
 
 int main() {
     uint8_t *mem = malloc(1<<21);

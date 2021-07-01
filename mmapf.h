@@ -25,7 +25,8 @@ typedef struct {
 // convenience
 #define MMAPF_RNDRD (MMAPF_RD|MMAPF_RND|MMAPF_PRE|MMAPF_WILLNEED)
 #define MMAPF_RNDUP (MMAPF_RW|MMAPF_RND|MMAPF_PRE|MMAPF_WILLNEED)
-#define MMAPF_SEQCR (MMAPF_WR|MMAPF_SEQ|MMAPF_CR|MMAPF_EX|MMAPF_NOREUSE|MMAPF_DONTNEED)
+#define MMAPF_SEQRD (MMAPF_RD|MMAPF_SEQ|MMAPF_WILLNEED)
+#define MMAPF_SEQCR (MMAPF_WR|MMAPF_SEQ|MMAPF_CR|MMAPF_EX)
 
 // returns
 #define MMAPF_OKAY          0
@@ -33,6 +34,10 @@ typedef struct {
 #define MMAPF_ENREG      1001
 #define MMAPF_ESIZE      1002
 #define MMAPF_EXLAST     1003
+
+#define mmapf_strerror __bloomslice_mmapf_strerror
+#define mmapf __bloomslice_mmapf
+#define munmapf __bloomslice_munmapf
 
 char * mmapf_strerror(int);
 int mmapf(mmapf_ctx *, const unsigned char *, size_t, int);

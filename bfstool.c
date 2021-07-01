@@ -19,10 +19,11 @@
 
 #include <math.h> /*  pow/exp */
 
+#include "extern.h"
 #include "hex.h"
 #include "mmapf.h"
 #include "hash160.h"
-#include "bloomslice.h"
+#include "bloomutl.h"
 
 #define bail(code, ...) \
 do { \
@@ -36,7 +37,7 @@ static void * _chkmalloc(size_t size, unsigned char *file, unsigned int line) {
   if (ptr == NULL) {
     bail(1, "[!] malloc(%zu) failed at %s:%u: %s\n", size, file, line, strerror(errno));
   }
-  return ptr; 
+  return ptr;
 }
 
 char hash_file_type(FILE *stream) {
@@ -58,21 +59,21 @@ Modes:
   -A - dump algorithm info
   -W - create bloom filter
   -R - check data against bloom filter
-  -D - produce bloom filter diff (later)
-  -P - patch bloom filter (later)
+  -D - produce bloom filter diff
+  -P - patch bloom filter
 Options:
   -b: - bloom file
   -x: - hash file
-  -d: - diff file (later)
-  -f: - filter file
+  -d: - diff file
+  -r: - reference file
   -i: - input for check mode
   -o: - output for check mode
   -w: - bloom filter width (create mode)
   -k: - bloom filter hashes (create mode)
   -e: - bloom filter error rate (create mode)
   -s: - bloom filter saturation (create mode)
-  -H  - force hash/input file to be treated as hex
-  -B  - force hash/input file to be treated as binary (raw)
+  -H: - force hash/input file to be treated as hex
+  -B: - force hash/input file to be treated as binary (raw)
 */
 void usage(unsigned char *name) {
   printf("Usage: %s OPTIONS...\n\n\
@@ -93,9 +94,9 @@ void usage(unsigned char *name) {
 int main(int argc, char **argv) {
   hash160_t hash;
   FILE *ifile = stdin, *ofile = stdout;
-  FILE *dfile = NULL, *hfile = NULL, *bfile = NULL, *ffile = NULL;
+  FILE *dfile = NULL, *hfile = NULL, *bfile = NULL, *ffile = NULL, *rfile = NULL;
 
-  mmapf_ctx bloom_mmapf;
+  mmapf_ctx bloom_mmapf, reference_mmapf, diff_mmapf;
   struct stat sb;
 
   uint8_t kopt = 0;
@@ -103,7 +104,7 @@ int main(int argc, char **argv) {
   double sopt = DEFAULT_MAX_SATURATION;
   double eopt = DEFAULT_MAX_ERROR_RATE;
 
-  unsigned char *bopt = NULL, *xopt = NULL, *fopt = NULL;
+  unsigned char *bopt = NULL, *xopt = NULL, *ropt = NULL;
   unsigned char *dopt = NULL, *iopt = NULL, *oopt = NULL;
 
   char mode = 0;
@@ -122,15 +123,18 @@ int main(int argc, char **argv) {
 
   int c, r;
 
-  while ((c = getopt(argc, argv, "ABHWRb:x:f:i:o:w:k:e:s:")) != -1) {
+  while ((c = getopt(argc, argv, "hABHWRDPb:x:d:r:f:i:o:w:k:e:s:")) != -1) {
     switch (c) {
       case 'A':
         for (int i = 0; i < 256; ++i) {
-          printf("%8s %p\n", deschash(i), jumphash(i));
+          printf("%3u: %8s        ", i, bloom_deschash(i));
+          if (i % 4 == 3) printf("\n");
         }
         return 0;
       case 'W':
       case 'R':
+      case 'D':
+      case 'P':
         if (mode) bail(1, "[!] Mode '%c' already selected, can't also specify '%c'\n", mode, c);
         mode = c; break;
       case 'H':
@@ -141,8 +145,10 @@ int main(int argc, char **argv) {
         bopt = optarg; break;
       case 'x':
         xopt = optarg; break;
-      case 'f':
-        fopt = optarg; break;
+      case 'r':
+        ropt = optarg; break;
+      case 'd':
+        dopt = optarg; break;
       case 'i':
         iopt = optarg; break;
       case 'o':
@@ -155,6 +161,17 @@ int main(int argc, char **argv) {
         eopt = atof(optarg); break;
       case 's':
         sopt = atof(optarg); break;
+      case 'h':
+        // show help
+        usage(argv[0]);
+        return 0;
+      case '?':
+        // show error
+        return 1;
+      default:
+        // should never be reached...
+        printf("got option '%c' (%d)\n", c, c);
+        return 1;
     }
   }
 
@@ -164,14 +181,16 @@ int main(int argc, char **argv) {
     // ##   CREATE MODE   ##
     // ##                 ##
     // #####################
-    if (!(bopt && xopt) || dopt || fopt || iopt || oopt) {
+    if (!bopt) bail(1, "[!] Bloom filter file must be specified with '-b'\n");
+    if (!xopt) bail(1, "[!] Hash file must be specified with '-x'\n");
+    if (dopt || ropt || iopt || oopt) {
       bail(1, "[!] Invalid combination of file options for create mode\n");
     }
 
     // manually specified number of hashes
     if (kopt) {
-      fprintf(stderr, "pickhash_wk w:%u k:%u\n", wopt, kopt);
-      if ((h = pickhash_wk(wopt, kopt)) == 255) {
+      fprintf(stderr, "bloom_pick_hash_wk w:%u k:%u\n", wopt, kopt);
+      if ((h = bloom_pick_hash_wk(wopt, kopt)) == 255) {
         bail(1, "[!] No hash routine found for specified parameters\n");
       }
     }
@@ -212,13 +231,13 @@ int main(int argc, char **argv) {
       h = BFS_TYPE_SINGLE;
     } else if (h >= 254) {
       if (eopt < 0) {
-        fprintf(stderr, "pickhash_wi w:%u i:%lu\n", wopt, items);
-        if ((h = pickhash_wi(wopt, items, &kopt)) >= 254) {
+        fprintf(stderr, "bloom_pick_hash_wi w:%u i:%lu\n", wopt, items);
+        if ((h = bloom_pick_hash_wi(wopt, items, &kopt)) >= 254) {
           bail(1, "[!] No hash routine found for specified parameters\n");
         }
       } else {
-        fprintf(stderr, "pickhash_es e:%.3e s:%.3f i:%lu w:%u k:%u\n", eopt, sopt, items, wopt, kopt);
-        if ((h = pickhash_es(eopt, sopt, items, &wopt, &kopt)) >= 254) {
+        fprintf(stderr, "bloom_pick_hash_es e:%.3e s:%.3f i:%lu w:%u k:%u\n", eopt, sopt, items, wopt, kopt);
+        if ((h = bloom_pick_hash_es(eopt, sopt, items, &wopt, &kopt)) >= 254) {
           bail(1, "[!] No hash routine found for specified parameters\n");
         }
       }
@@ -243,14 +262,13 @@ int main(int argc, char **argv) {
     sat = bloom_saturation(kopt, 1ULL<<wopt, items);
     err_rate = pow(sat, kopt);
 
-    fprintf(stderr, "[*] Selected function %s (%u) with mask 0x%zx\n", deschash(h), h, mask);
+    fprintf(stderr, "[*] Selected function %s (%u) with mask 0x%zx\n", bloom_deschash(h), h, mask);
     fprintf(stderr, "[*] Have %zu hashes to load into %zu bit filter (%zu bytes)\n", items, (bloom_size - 9) * 8, bloom_size);
     if (items > 0) {
       fprintf(stderr, "[*] Saturation: ~%.3f\n", sat);
       fprintf(stderr, "[*] False positive rate: ~%.3e (1 in ~%.3e)\n", err_rate, 1/err_rate);
     }
 
-    exit(0);
     bloom = chkmalloc(bloom_size);
     fprintf(stderr, "[*] Zeroing memory...\n");
     memset(bloom, 0, bloom_size);
@@ -295,10 +313,8 @@ int main(int argc, char **argv) {
     // ##   CHECK MODE   ##
     // ##                ##
     // ####################
-    if (!bopt) {
-      bail(1, "[!] Bloom filter file must be specified with '-b'\n");
-    }
-    if (dopt || xopt) {
+    if (!bopt) bail(1, "[!] Bloom filter file must be specified with '-b'\n");
+    if (dopt || xopt || ropt) {
       bail(1, "[!] Invalid combination of file options for check mode\n");
     }
     if (iopt && (ifile = fopen(iopt, "r")) == NULL) {
@@ -329,7 +345,7 @@ int main(int argc, char **argv) {
     mask = bloom_size_to_mask(sb.st_size); // h == BFS_TYPE_SINGLE ? 0 : ((sb.st_size<<3ULL) & 0xffffffffff00)-1;
     //items = bloom_get_items(bloom, bloom_size);
 
-    fprintf(stderr, "[*] Using function %s (0x%02x) with mask 0x%zx\n", deschash(h), h, mask);
+    fprintf(stderr, "[*] Using function %s (0x%02x) with mask 0x%zx\n", bloom_deschash(h), h, mask);
 
     while ((r = getline(&line, &line_sz, ifile)) > 0) {
       if (r > 40) {
@@ -339,7 +355,85 @@ int main(int argc, char **argv) {
         }
       }
     }
+  } else if (mode == 'D') {
+    // ###################
+    // ##               ##
+    // ##   DIFF MODE   ##
+    // ##               ##
+    // ###################
+    if (!ropt) bail(1, "[!] Old bloom filter file must be specified with '-r'\n");
+    if (!bopt) bail(1, "[!] New bloom filter file must be specified with '-b'\n");
+    if (!dopt) bail(1, "[!] Bloom filter diff file must be specified with '-d'\n");
+    if (xopt) {
+      bail(1, "[!] Invalid combination of file options for diff mode\n");
+    }
 
+    if (stat(bopt, &sb) == 0) {
+      if (!S_ISREG(sb.st_mode)) {
+        bail(1, "[!] Bloom filter file '%s' is not a regular file\n", bopt);
+      }
+      if (!bloom_chk_size(sb.st_size)) {
+        bail(1, "[!] Bloom filter file '%s' is not a valid size\n", bopt);
+      }
+    } else {
+      bail(1, "[!] Failed to stat '%s': %s\n", bopt, strerror(errno));
+    }
+
+    if ((r = mmapf(&bloom_mmapf, bopt, sb.st_size, MMAPF_SEQRD)) != MMAPF_OKAY) {
+      bail(1, "[!] Failed to open bloom filter '%s': %s\n", bopt, mmapf_strerror(r));
+    } else if (bloom_mmapf.mem == NULL) {
+      bail(1, "[!] Got NULL pointer trying to set up bloom filter '%s'\n", bopt);
+    }
+
+    if (stat(ropt, &sb) == 0) {
+      if (!S_ISREG(sb.st_mode)) {
+        bail(1, "[!] Bloom filter file '%s' is not a regular file\n", ropt);
+      }
+      if (!bloom_chk_size(sb.st_size)) {
+        bail(1, "[!] Bloom filter file '%s' is not a valid size\n", ropt);
+      }
+    } else {
+      bail(1, "[!] Failed to stat '%s': %s\n", ropt, strerror(errno));
+    }
+
+    if ((r = mmapf(&reference_mmapf, ropt, sb.st_size, MMAPF_SEQRD)) != MMAPF_OKAY) {
+      bail(1, "[!] Failed to open bloom filter '%s': %s\n", ropt, mmapf_strerror(r));
+    } else if (reference_mmapf.mem == NULL) {
+      bail(1, "[!] Got NULL pointer trying to set up bloom filter '%s'\n", ropt);
+    }
+
+    if (bloom_mmapf.file_sz != reference_mmapf.file_sz) {
+      bail(1, "[!] Old and new bloom filter files are different sizes!\n");
+    }
+
+    if ((r = mmapf(&diff_mmapf, dopt, bloom_mmapf.file_sz, MMAPF_SEQCR)) != MMAPF_OKAY) {
+      bail(1, "[!] Failed to open bloom filter diff '%s': %s\n", dopt, mmapf_strerror(r));
+    } else if (diff_mmapf.mem == NULL) {
+      bail(1, "[!] Got NULL pointer trying to set up bloom filter diff '%s'\n", ropt);
+    }
+
+    fprintf(stderr, "[*] Generating diff between '%s' and '%s'   0.0%%", ropt, bopt);
+    for (int i = 0; i < bloom_mmapf.file_sz; ++i) {
+      ((unsigned char *)diff_mmapf.mem)[i] = ((unsigned char *)reference_mmapf.mem)[i] ^ ((unsigned char *)bloom_mmapf.mem)[i];
+      if ((i & 0x7ffff) == 0) {
+        pct = 100.0 * i / bloom_mmapf.file_sz;
+        fprintf(stderr, "\033[7D %5.1f%%", pct);
+        fflush(stderr);
+      }
+    }
+    fprintf(stderr, "\033[7D 100.0%%\n");
+  } else if (mode == 'P') {
+    // ####################
+    // ##                ##
+    // ##   PATCH MODE   ##
+    // ##                ##
+    // ####################
+    if (!ropt) bail(1, "[!] Old bloom filter file must be specified with '-r'\n");
+    if (!bopt) bail(1, "[!] New bloom filter file must be specified with '-b'\n");
+    if (!dopt) bail(1, "[!] Bloom filter diff file must be specified with '-d'\n");
+    if (xopt) {
+      bail(1, "[!] Invalid combination of file options for diff mode\n");
+    }
   } else {
     bail(1, "[!] No valid mode selected\n");
   }

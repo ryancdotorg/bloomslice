@@ -7,7 +7,7 @@
 
 #include "extern.h"
 #include "hash160.h"
-#include "bloomslice.h"
+#include "bloomutl.h"
 
 #define BLOOM_SET_BIT(N) (mem[(N)>>3] = mem[(N)>>3] | (1<<((N)&7)))
 

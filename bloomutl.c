@@ -8,7 +8,7 @@
 
 #include "extern.h"
 #include "hash160.h"
-#include "bloomslice.h"
+#include "bloomutl.h"
 
 #define FOOTER_BYTES (sizeof(uint64_t) + sizeof(uint8_t))
 #define LEGACY_BYTES 536870912
@@ -18,9 +18,7 @@ double bloom_saturation(uint32_t k, uint64_t m, uint64_t n) {
   return 1 - pow(1 - (1 / (double)m), (double)k * (double)n);
 }
 
-//char * deschash(uint8_t h) { return (&hashD)+h*8; }
-char * deschash(uint8_t h) { return hashD[h]; }
-void * jumphash(uint8_t h) { return (void *)(hashJ[h]); }
+char * bloom_deschash(uint8_t h) { return hashD[h]; }
 
 size_t bloom_width_to_size(uint8_t width) {
   if (width == BFS_TYPE_LEGACY) {
@@ -94,7 +92,7 @@ void bloom_set_items(unsigned char *bloom, size_t sz, uint64_t n) {
   memcpy((bloom+sz)-FOOTER_BYTES, &n, sizeof(uint64_t));
 }
 
-uint8_t pickhash_wk(uint8_t width, uint8_t hashes) {
+uint8_t bloom_pick_hash_wk(uint8_t width, uint8_t hashes) {
   if (hashes < 1 || width < 8 || width > 48) { // invalid parameters
     return 255;
   } else if (hashes <= hash1sN && width >= 8 && width <= 16) { // hash1s
@@ -110,7 +108,7 @@ uint8_t pickhash_wk(uint8_t width, uint8_t hashes) {
   }
 }
 
-uint8_t pickhash_wi(uint8_t width, uint64_t items, uint8_t *k) {
+uint8_t bloom_pick_hash_wi(uint8_t width, uint64_t items, uint8_t *k) {
   double bits = 1ULL<<width;
   unsigned int opt = round((log(2.0) * bits) / (double)items);
   uint8_t kOpt = opt < 256 ? (opt > 0 ? opt : 1) : 255;
@@ -119,34 +117,34 @@ uint8_t pickhash_wi(uint8_t width, uint64_t items, uint8_t *k) {
     return 255;
   } else if (kOpt <= hash1sN && width >= 8 && width <= 16) { // hash1s
     *k = kOpt;
-    return pickhash_wk(width, kOpt);
+    return bloom_pick_hash_wk(width, kOpt);
   } else if (width == 8) {
     *k = hash1sN;
-    return pickhash_wk(width, hash1sN);
+    return bloom_pick_hash_wk(width, hash1sN);
   } else if (kOpt <= hash2bN && width >  8 && width <= 16) { // hash2b
     *k = kOpt;
-    return pickhash_wk(width, kOpt);
+    return bloom_pick_hash_wk(width, kOpt);
   } else if (width <= 16) {
     *k = hash2bN;
-    return pickhash_wk(width, hash2bN);
+    return bloom_pick_hash_wk(width, hash2bN);
   } else if (kOpt <= hash2sN && width > 16 && width <= 32) { // hash2s
     *k = kOpt;
-    return pickhash_wk(width, kOpt);
+    return bloom_pick_hash_wk(width, kOpt);
   } else if (width <= 32) {
     *k = hash2sN;
-    return pickhash_wk(width, hash2sN);
+    return bloom_pick_hash_wk(width, hash2sN);
   } else if (kOpt <= hash3sN && width > 32 && width <= 48) { // hash3s
     *k = kOpt;
-    return pickhash_wk(width, kOpt);
+    return bloom_pick_hash_wk(width, kOpt);
   } else if (width <= 48) {
     *k = hash3sN;
-    return pickhash_wk(width, hash3sN);
+    return bloom_pick_hash_wk(width, hash3sN);
   } else { // no suitable hash found
     return 255;
   }
 }
 
-uint8_t pickhash_es(double max_error, double max_bloom_saturation, uint64_t n, uint8_t *max_w, uint8_t *new_k) {
+uint8_t bloom_pick_hash_es(double max_error, double max_bloom_saturation, uint64_t n, uint8_t *max_w, uint8_t *new_k) {
   if (max_error < 0 || max_bloom_saturation < 0) return 255;
 
   int i;
@@ -188,7 +186,7 @@ uint8_t pickhash_es(double max_error, double max_bloom_saturation, uint64_t n, u
 
   if (new_k) *new_k = k;
 
-  return pickhash_wk(w, k);
+  return bloom_pick_hash_wk(w, k);
 }
 
 /*  vim: set ts=2 sw=2 et ai si: */

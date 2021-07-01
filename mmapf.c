@@ -53,8 +53,8 @@ int mmapf(mmapf_ctx *ctx, const unsigned char *filename, size_t size, int flags)
   size_t page_sz = sysconf(_SC_PAGESIZE);
   struct stat sb;
 
-  int mmode = 0, mflags = 0, madv = 0;
-  int fmode = 0, fadv = 0;
+  int mmode = 0, mflags = 0;
+  int fmode = 0;
   int ret, fd;
 
   // initialize
@@ -82,15 +82,6 @@ int mmapf(mmapf_ctx *ctx, const unsigned char *filename, size_t size, int flags)
   if (flags & MMAPF_CR) { fmode |= O_CREAT; }
   if (flags & MMAPF_EX) { fmode |= O_EXCL; }
   if (flags & MMAPF_PRE) { mflags |= MAP_POPULATE; }
-  if (flags & MMAPF_NOREUSE) { fadv |= POSIX_FADV_NOREUSE; }
-  if (flags & MMAPF_RND) { fadv |= POSIX_FADV_RANDOM; madv |= POSIX_MADV_RANDOM; }
-  if (flags & MMAPF_SEQ) { fadv |= POSIX_FADV_SEQUENTIAL; madv |= POSIX_MADV_SEQUENTIAL; }
-  if (flags & MMAPF_DONTNEED) { fadv |= POSIX_FADV_DONTNEED; madv |= POSIX_MADV_DONTNEED; }
-  if (flags & MMAPF_WILLNEED) {
-    fadv |= POSIX_FADV_WILLNEED;
-    // seems to fail on anonymous maps
-    if (filename) { madv |= POSIX_MADV_WILLNEED; }
-  }
 
   if (!filename) {
     ctx->mem = mmap(NULL, ctx->mmap_sz, mmode, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
@@ -100,7 +91,7 @@ int mmapf(mmapf_ctx *ctx, const unsigned char *filename, size_t size, int flags)
       if (sb.st_size != (off_t)size) { return MMAPF_ESIZE; } // wrong size
       if ((fd = open64(filename, fmode)) < 0) { return errno; } // open failed
     } else if (flags & MMAPF_CR) { // file missing, but creation requested
-      if ((fd = open64(filename, fmode)) < 0) { return errno; } // open failed
+      if ((fd = open64(filename, fmode, 0644)) < 0) { return errno; } // open failed
       if ((ret = posix_fallocate(fd, 0, size)) != 0) {
         // EBADF is returned on an unsupported filesystem, ignore it
         if (ret != EBADF) { return ret; }
@@ -110,7 +101,13 @@ int mmapf(mmapf_ctx *ctx, const unsigned char *filename, size_t size, int flags)
     }
 
     //if ((ret = posix_fadvise(fd, 0, size, fadv)) != 0) { return ret; }
-    posix_fadvise(fd, 0, size, fadv); // ignore result
+    // ignore results
+    if (flags & MMAPF_NOREUSE) posix_fadvise(fd, 0, size, POSIX_FADV_NOREUSE);
+    if (flags & MMAPF_RND) posix_fadvise(fd, 0, size, POSIX_FADV_RANDOM);
+    if (flags & MMAPF_SEQ) posix_fadvise(fd, 0, size, POSIX_FADV_SEQUENTIAL);
+    if (flags & MMAPF_DONTNEED) posix_fadvise(fd, 0, size, POSIX_FADV_DONTNEED);
+    if (flags & MMAPF_WILLNEED) posix_fadvise(fd, 0, size, POSIX_FADV_WILLNEED);
+
     ctx->mem = mmap(NULL, ctx->mmap_sz, mmode, mflags, fd, 0);
   }
 
@@ -120,7 +117,25 @@ int mmapf(mmapf_ctx *ctx, const unsigned char *filename, size_t size, int flags)
     return ENOMEM;
   }
 
-  if ((ret = posix_madvise(ctx->mem, ctx->mmap_sz, madv)) != 0) {
+  if (flags & MMAPF_RND && (ret = posix_madvise(ctx->mem, ctx->mmap_sz, POSIX_MADV_RANDOM)) != 0) {
+    munmap(ctx->mem, ctx->mmap_sz);
+    ctx->mem = NULL;
+    return ret;
+  }
+
+  if (flags & MMAPF_SEQ && (ret = posix_madvise(ctx->mem, ctx->mmap_sz, POSIX_MADV_SEQUENTIAL)) != 0) {
+    munmap(ctx->mem, ctx->mmap_sz);
+    ctx->mem = NULL;
+    return ret;
+  }
+
+  if (flags & MMAPF_DONTNEED && (ret = posix_madvise(ctx->mem, ctx->mmap_sz, POSIX_MADV_DONTNEED)) != 0) {
+    munmap(ctx->mem, ctx->mmap_sz);
+    ctx->mem = NULL;
+    return ret;
+  }
+
+  if (flags & MMAPF_WILLNEED && filename && (ret = posix_madvise(ctx->mem, ctx->mmap_sz, POSIX_MADV_WILLNEED)) != 0) {
     munmap(ctx->mem, ctx->mmap_sz);
     ctx->mem = NULL;
     return ret;
